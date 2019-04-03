@@ -34,7 +34,7 @@ import Servant.API
 api :: Proxy Api
 api = Proxy
 
-type Api = Addresses :<|> Wallets
+type Api = Addresses :<|> Wallets :<|> Transactions
 
 {-------------------------------------------------------------------------------
                                   Addresses
@@ -96,6 +96,16 @@ type PutWalletPassphrase = "wallets"
     :> ReqBody '[JSON] WalletPutPassphraseData
     :> Put '[] NoContent
 
+{-------------------------------------------------------------------------------
+                                  Transactions
+
+  See also: https://input-output-hk.github.io/cardano-wallet/api/#tag/Transactions
+-------------------------------------------------------------------------------}
+
+type Transactions =
+    CreateTransaction
+
+-- | https://input-output-hk.github.io/cardano-wallet/api/#operation/postTransaction
 type CreateTransaction = "wallets"
     :> Capture "walletId" WalletId
     :> "transactions"
