@@ -37,8 +37,8 @@ module Cardano.Wallet.Api.Types
     , WalletPutData (..)
     , WalletPutPassphraseData (..)
     , CreateTransactionData (..)
-    , BlockData (..)
-    , Transaction (..)
+    , ApiBlockData (..)
+    , ApiTransaction (..)
 
     -- * Encoding & Decoding
     , DecodeApiAddressError (..)
@@ -112,7 +112,7 @@ import Data.Aeson
     , sumEncoding
     )
 import Data.Bifunctor
-    ( first )
+    ( bimap, first )
 import Data.ByteArray.Encoding
     ( Base (Base16), convertFromBase, convertToBase )
 import Data.ByteString.Base58
@@ -179,10 +179,10 @@ data CreateTransactionData = CreateTransactionData
     , passphrase :: !(ApiT (Passphrase "encryption"))
     } deriving (Eq, Generic, Show)
 
-data Transaction = Transaction
+data ApiTransaction = Transaction
     { id :: !(ApiT (Hash "Tx"))
     , amount :: !(Quantity "lovelace" Natural)
-    , insertedAt :: !BlockData
+    , insertedAt :: !ApiBlockData
     , depth :: !(Quantity "block" Natural)
     , direction :: !(ApiT Direction)
     , inputs :: ![ApiCoinSelection]
@@ -195,41 +195,11 @@ data ApiCoinSelection = ApiCoinSelection
     , coin :: !(Quantity "lovelace" Natural)
     } deriving (Eq, Generic, Show)
 
-data BlockData = BlockData
+data ApiBlockData = ApiBlockData
     { time :: UTCTime
     , block :: !(ApiT SlotId)
     } deriving (Eq, Generic, Show)
 
---instance FromJSON CreateTransactionData where
---    parseJSON = genericParseJSON defaultRecordTypeOptions
---instance ToJSON CreateTransactionData where
---    toJSON = genericToJSON defaultRecordTypeOptions
-
--- FIXME: deal with camel case
-instance FromJSON (ApiT SlotId) where
-    parseJSON = fmap ApiT . genericParseJSON defaultRecordTypeOptions
-instance ToJSON (ApiT SlotId) where
-    toJSON = genericToJSON defaultRecordTypeOptions . getApiT
-
-instance FromJSON BlockData where
-    parseJSON = genericParseJSON defaultRecordTypeOptions
-instance ToJSON BlockData where
-    toJSON = genericToJSON defaultRecordTypeOptions
-
-instance FromJSON ApiCoinSelection where
-    parseJSON = genericParseJSON defaultRecordTypeOptions
-instance ToJSON ApiCoinSelection where
-    toJSON = genericToJSON defaultRecordTypeOptions
-
-instance FromJSON Transaction where
-    parseJSON = genericParseJSON defaultRecordTypeOptions
-instance ToJSON Transaction where
-    toJSON = genericToJSON defaultRecordTypeOptions
-
-instance FromJSON (ApiT (Hash "Tx")) where
-    parseJSON = undefined
-instance ToJSON (ApiT (Hash "Tx")) where
-    toJSON = toJSON . encodeApiTxHash
 
 {-------------------------------------------------------------------------------
                               Polymorphic Types
@@ -301,10 +271,11 @@ newtype DecodeApiTxHashError = DecodeApiTxHashError String
 --
 -- Fails if the specified string is not Base16 encoded.
 decodeApiTxHash :: Text -> Either DecodeApiTxHashError (ApiT (Hash "Tx"))
-decodeApiTxHash x = maybe
-    (Left $ DecodeApiTxHashError
-        "Unable to decode transaction hash: expected Base16 encoding")
-    (pure . ApiT . Hash)
+decodeApiTxHash x = bimap
+    (DecodeApiTxHashError .
+        mappend "Unable to decode transaction hash: expected Base16 encoding.\
+        \ Underlying error: ")
+    (ApiT . Hash)
     (convertFromBase Base16 $ T.encodeUtf8 x)
 
 -- | Converts tx hash to a Base16-encoded string.
@@ -531,6 +502,46 @@ walletStateOptions = taggedSumTypeOptions $ TaggedObjectOptions
     { _tagFieldName = "status"
     , _contentsFieldName = "progress"
     }
+
+instance FromJSON CreateTransactionData where
+    parseJSON = genericParseJSON defaultRecordTypeOptions
+instance ToJSON CreateTransactionData where
+    toJSON = genericToJSON defaultRecordTypeOptions
+
+instance FromJSON (ApiT SlotId) where
+    parseJSON = fmap ApiT . genericParseJSON defaultRecordTypeOptions
+instance ToJSON (ApiT SlotId) where
+    toJSON = genericToJSON defaultRecordTypeOptions . getApiT
+
+instance FromJSON ApiBlockData where
+    parseJSON = genericParseJSON defaultRecordTypeOptions
+instance ToJSON ApiBlockData where
+    toJSON = genericToJSON defaultRecordTypeOptions
+
+instance FromJSON ApiCoinSelection where
+    parseJSON = genericParseJSON defaultRecordTypeOptions
+instance ToJSON ApiCoinSelection where
+    toJSON = genericToJSON defaultRecordTypeOptions
+
+instance FromJSON ApiTransaction where
+    parseJSON = genericParseJSON defaultRecordTypeOptions
+instance ToJSON ApiTransaction where
+    toJSON = genericToJSON defaultRecordTypeOptions
+
+instance FromJSON (ApiT (Hash "Tx")) where
+    parseJSON = parseJSON >=> eitherToParser . left ShowFmt . decodeApiTxHash
+instance ToJSON (ApiT (Hash "Tx")) where
+    toJSON = toJSON . encodeApiTxHash
+
+instance FromJSON (ApiT Direction) where
+    parseJSON = fmap ApiT . genericParseJSON defaultSumTypeOptions
+instance ToJSON (ApiT Direction) where
+    toJSON = genericToJSON defaultSumTypeOptions . getApiT
+
+instance FromJSON (ApiT TxStatus) where
+    parseJSON = fmap ApiT . genericParseJSON defaultSumTypeOptions
+instance ToJSON (ApiT TxStatus) where
+    toJSON = genericToJSON defaultSumTypeOptions . getApiT
 
 {-------------------------------------------------------------------------------
                                 Aeson Options

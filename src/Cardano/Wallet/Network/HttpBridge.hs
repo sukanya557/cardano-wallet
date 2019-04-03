@@ -86,12 +86,12 @@ rbNextBlocks
     -> ExceptT e m [Block]
 rbNextBlocks network start = do
     (tipHash, tip) <- fmap slotId <$> getNetworkTip network
-    epochBlocks <- lift $ nextStableEpoch (epochIndex start)
+    epochBlocks <- lift $ nextStableEpoch (epochNumber start)
     additionalBlocks <-
         if null epochBlocks then
             unstableBlocks tipHash tip
         else if length epochBlocks < 1000 then
-            lift $ nextStableEpoch (epochIndex start + 1)
+            lift $ nextStableEpoch (epochNumber start + 1)
         else
             pure []
     pure (epochBlocks ++ additionalBlocks)
